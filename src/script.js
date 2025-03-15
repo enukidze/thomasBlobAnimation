@@ -57,8 +57,8 @@ const fragmentShader = `
     g.yz = a0.yz * x12.xz + h.yz * x12.yw;
     return 130.0 * dot(m, g);
   }
-
-    void main() {
+    
+  void main() {
     vec2 uv = vUv;
     
     // Slow-moving base noise
@@ -85,7 +85,6 @@ const fragmentShader = `
     
     gl_FragColor = vec4(baseColor, 1.0);
   }
-
 
 
 
