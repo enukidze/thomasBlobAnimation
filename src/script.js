@@ -6,11 +6,9 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 camera.position.z = 10;
 
 // Calculate viewport bounds based on camera FOV and position
-const fov = camera.fov * (Math.PI / 180); // Convert to radians
-const bounds = {
-  y: Math.tan(fov / 2) * camera.position.z, // height = tan(fov/2) * distance
-  x: Math.tan(fov / 2) * camera.position.z * camera.aspect // width = height * aspect ratio
-};
+const fov = camera.fov * (Math.PI / 180);
+const height = 2 * Math.tan(fov / 2) * camera.position.z;
+const width = height * camera.aspect;
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -18,114 +16,148 @@ document.body.appendChild(renderer.domElement);
 
 // Vertex Shader
 const vertexShader = `
-  uniform float time;
-  uniform float impact;
   varying vec2 vUv;
+  
   void main() {
     vUv = uv;
-    vec3 pos = position;
-    float wobble = impact * 0.5 * sin(time * 10.0);
-    pos.x += sin(time + pos.y * 3.0) * (0.2 + wobble);
-    pos.y += cos(time + pos.x * 3.0) * (0.2 + wobble);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
 // Fragment Shader
 const fragmentShader = `
   uniform float time;
-  uniform float impact;
   varying vec2 vUv;
-  void main() {
-    vec3 color = vec3(vUv, abs(sin(time)));
-    color += vec3(impact * 0.3);
-    gl_FragColor = vec4(color, 1.0);
+
+  // Simplex noise function
+  vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+  vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
+
+  float snoise(vec2 v) {
+    const vec4 C = vec4(0.211324865405187, 0.366025403784439,
+                       -0.577350269189626, 0.024390243902439);
+    vec2 i  = floor(v + dot(v, C.yy));
+    vec2 x0 = v -   i + dot(i, C.xx);
+    vec2 i1 = (x0.x > x0.y) ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+    vec4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = mod289(i);
+    vec3 p = permute(permute(i.y + vec3(0.0, i1.y, 1.0)) + i.x + vec3(0.0, i1.x, 1.0));
+    vec3 m = max(0.5 - vec3(dot(x0,x0), dot(x12.xy,x12.xy), dot(x12.zw,x12.zw)), 0.0);
+    m = m*m;
+    m = m*m;
+    vec3 x = 2.0 * fract(p * C.www) - 1.0;
+    vec3 h = abs(x) - 0.5;
+    vec3 ox = floor(x + 0.5);
+    vec3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0*a0 + h*h);
+    vec3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
   }
+
+    void main() {
+    vec2 uv = vUv;
+    
+    // Slow-moving base noise
+    float baseNoise = snoise(vec2(uv.x * 2.0 + time * 0.1, uv.y * 2.0 + time * 0.15)) * 0.5 + 0.5;
+    
+    // Additional layer of finer, faster noise
+    float detailNoise = snoise(vec2(uv.x * 4.0 - time * 0.05, uv.y * 4.0 - time * 0.075)) * 0.25;
+    
+    // Combine noise layers
+    float combinedNoise = baseNoise + detailNoise;
+    
+    // New vibrant colors
+    vec3 greenColor = vec3(0.2, 0.8, 0.4);    // Vibrant green
+    vec3 orangeColor = vec3(1.0, 0.6, 0.2);   // Vibrant orange
+    vec3 baseColor = mix(greenColor, orangeColor, combinedNoise);
+    
+    // Add stronger white noise
+    float whiteNoise = snoise(vec2(uv.x * 1000.0, uv.y * 1000.0 + time)) * 0.03;
+    baseColor += vec3(whiteNoise);
+    
+    // Enhanced vignette effect
+    float vignette = 1.0 - smoothstep(0.5, 1.5, length(uv - 0.5) * 2.0);
+    baseColor *= 0.95 + (vignette * 0.05);
+    
+    gl_FragColor = vec4(baseColor, 1.0);
+  }
+
+
+
+
+//   void main() {
+//     vec2 uv = vUv;
+    
+//     // Create softer, larger scale base noise
+//     float baseNoise = snoise(vec2(
+//       uv.x * 1.5 + time * 0.05, 
+//       uv.y * 1.5 + time * 0.07
+//     )) * 0.5 + 0.5;
+    
+//     // Add multiple layers of noise at different scales for cloudlike effect
+//     float noise1 = snoise(vec2(
+//       uv.x * 2.0 + time * 0.03, 
+//       uv.y * 2.0 + time * 0.04
+//     )) * 0.25;
+    
+//     float noise2 = snoise(vec2(
+//       uv.x * 3.0 - time * 0.02, 
+//       uv.y * 3.0 - time * 0.03
+//     )) * 0.125;
+    
+//     // Combine noises with smooth falloff
+//     float combinedNoise = smoothstep(0.2, 0.8, baseNoise + noise1 + noise2);
+    
+//     // Softer color transition
+//     vec3 greenColor = vec3(0.4, 0.85, 0.4);    // Softer green
+//     vec3 creamColor = vec3(0.95, 0.92, 0.85);  // Warm cream color
+    
+//     // Create soft edges using distance from center
+//     vec2 center = vec2(0.5, 0.5);
+//     float dist = length(uv - center);
+//     float softEdge = 1.0 - smoothstep(0.0, 1.0, dist * 1.5);
+    
+//     // Mix colors with soft edges
+//     vec3 baseColor = mix(creamColor, greenColor, combinedNoise * softEdge);
+    
+//     // Add very fine grain for texture
+//     float grain = snoise(vec2(uv.x * 200.0, uv.y * 200.0)) * 0.015;
+//     baseColor += vec3(grain);
+    
+//     // Fade edges to white
+//     vec3 white = vec3(1.0);
+//     float edgeFade = smoothstep(0.4, 1.0, dist);
+//     baseColor = mix(baseColor, white, edgeFade);
+    
+//     gl_FragColor = vec4(baseColor, 1.0);
+//   }
 `;
 
-// Shader material with impact uniform
-const shaderMaterial = new THREE.ShaderMaterial({
-  vertexShader: vertexShader,
-  fragmentShader: fragmentShader,
+// Create a single large plane that covers the viewport
+const geometry = new THREE.PlaneGeometry(width, height, 1, 1);
+
+const material = new THREE.ShaderMaterial({
+  vertexShader,
+  fragmentShader,
   uniforms: {
-    time: { value: 0.0 },
-    impact: { value: 0.0 }
+    time: { value: 0.0 }
   }
 });
 
-// Create Geometry & Meshes
-const geometry = new THREE.SphereGeometry(1.5, 32, 32);
-const mesh1 = new THREE.Mesh(geometry, shaderMaterial.clone());
-const mesh2 = new THREE.Mesh(geometry, shaderMaterial.clone());
-const mesh3 = new THREE.Mesh(geometry, shaderMaterial.clone());
-
-scene.add(mesh1, mesh2, mesh3);
-mesh2.position.set(2, 2, 0);
-mesh3.position.set(-2, -2, 0);
-
-// Animation Setup
-const clock = new THREE.Clock();
-const spheres = [
-  { mesh: mesh1, velocity: { x: 0.05, y: 0.03 }, impactDecay: 0.0 },
-  { mesh: mesh2, velocity: { x: -0.04, y: 0.05 }, impactDecay: 0.0 },
-  { mesh: mesh3, velocity: { x: 0.03, y: -0.04 }, impactDecay: 0.0 }
-];
+const mesh = new THREE.Mesh(geometry, material);
+scene.add(mesh);
 
 // Animation Loop
+const clock = new THREE.Clock();
+
 function animate() {
   requestAnimationFrame(animate);
   const time = clock.getElapsedTime();
-
-  spheres.forEach(sphere => {
-    sphere.mesh.material.uniforms.time.value = time;
-    sphere.impactDecay *= 0.95;
-    sphere.mesh.material.uniforms.impact.value = sphere.impactDecay;
-    sphere.mesh.rotation.y += 0.005;
-    sphere.mesh.rotation.x += 0.003;
-    sphere.mesh.position.x += sphere.velocity.x;
-    sphere.mesh.position.y += sphere.velocity.y;
-
-    // Check wall collisions
-    const radius = 1.5;
-    if (Math.abs(sphere.mesh.position.x) > bounds.x - radius) {
-      sphere.velocity.x *= -1;
-      sphere.impactDecay = 1.0;
-      sphere.mesh.position.x = (bounds.x - radius) * Math.sign(sphere.mesh.position.x);
-    }
-    if (Math.abs(sphere.mesh.position.y) > bounds.y - radius) {
-      sphere.velocity.y *= -1;
-      sphere.impactDecay = 1.0;
-      sphere.mesh.position.y = (bounds.y - radius) * Math.sign(sphere.mesh.position.y);
-    }
-  });
-
-  // Check sphere-to-sphere collisions
-  for (let i = 0; i < spheres.length; i++) {
-    for (let j = i + 1; j < spheres.length; j++) {
-      const sphere1 = spheres[i];
-      const sphere2 = spheres[j];
-      const dx = sphere2.mesh.position.x - sphere1.mesh.position.x;
-      const dy = sphere2.mesh.position.y - sphere1.mesh.position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (distance < 3) {
-        const nx = dx / distance;
-        const ny = dy / distance;
-        const overlap = 3 - distance;
-        sphere1.mesh.position.x -= (overlap / 2) * nx;
-        sphere1.mesh.position.y -= (overlap / 2) * ny;
-        sphere2.mesh.position.x += (overlap / 2) * nx;
-        sphere2.mesh.position.y += (overlap / 2) * ny;
-
-        // Swap velocities
-        [sphere1.velocity, sphere2.velocity] = [sphere2.velocity, sphere1.velocity];
-
-        sphere1.impactDecay = 1.0;
-        sphere2.impactDecay = 1.0;
-      }
-    }
-  }
-
+  mesh.material.uniforms.time.value = time;
   renderer.render(scene, camera);
 }
 animate();
@@ -135,4 +167,9 @@ window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // Update plane size
+  const height = 2 * Math.tan(fov / 2) * camera.position.z;
+  const width = height * camera.aspect;
+  mesh.scale.set(width, height, 1);
 });
