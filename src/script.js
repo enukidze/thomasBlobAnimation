@@ -70,66 +70,68 @@ const fragmentShader = `
     
   void main() {
     vec2 uv = vUv * 2.0 - 1.0;
-    float dist = length(uv) * 0.8;
+    uv.x *= 1.4;
+    float dist = length(uv);
     
-    // Create three layers of noise for more complex movement
     float baseNoise = snoise(vec2(
-      uv.x * 1.2 + time * 0.15, 
-      uv.y * 1.2 + time * 0.17
-    )) * 0.6;
+      uv.x * 0.8 + time * 0.1, 
+      uv.y * 1.2 + time * 0.15
+    )) * 0.7;
     
     float noise2 = snoise(vec2(
-      uv.x * 2.0 - time * 0.12, 
-      uv.y * 2.0 - time * 0.14
+      uv.x * 1.5 + time * 0.08, 
+      uv.y * 2.0 + time * 0.12
     )) * 0.4;
     
-    float noise3 = snoise(vec2(
-      uv.x * 1.5 + time * 0.08, 
-      uv.y * 1.5 + time * 0.09
-    )) * 0.5;
+    float blobShape = smoothstep(1.1, 0.2, dist + baseNoise + noise2);
     
-    float blobShape = smoothstep(1.0, 0.3, dist + baseNoise + noise2);
+    // Slightly more vibrant colors while keeping the same tone
+    vec3 greenColor = vec3(0.32, 0.8, 0.22);     // Slightly more saturated green
+    vec3 orangeColor = vec3(1.0, 0.65, 0.15);    // More punchy orange
+    vec3 sandColor = vec3(0.98, 0.85, 0.55);     // Slightly warmer sand
     
-    // Define three colors
-    vec3 orangeColor = vec3(1.0, 0.4, 0.1);    // Vibrant orange
-    vec3 sandColor = vec3(0.95, 0.8, 0.5);     // Warm sand/beige
-    vec3 greenColor = vec3(0.3, 0.85, 0.2);    // Vibrant green
-    
-    // Create two noise patterns for color mixing
     float colorNoise1 = snoise(vec2(
-      uv.x * 1.5 + time * 0.1, 
-      uv.y * 1.5 + time * 0.12
+      uv.x * 0.6 + time * 0.07, 
+      uv.y * 0.8 + time * 0.09
     )) * 0.5 + 0.5;
     
     float colorNoise2 = snoise(vec2(
-      uv.x * 1.8 - time * 0.08, 
-      uv.y * 1.8 - time * 0.1
+      uv.x * 0.8 - time * 0.05, 
+      uv.y * 1.0 - time * 0.08
     )) * 0.5 + 0.5;
     
-    // Create smooth transitions between all three colors
-    colorNoise1 = smoothstep(0.2, 0.8, colorNoise1);
-    colorNoise2 = smoothstep(0.3, 0.7, colorNoise2);
+    // Slightly sharper color transitions
+    colorNoise1 = smoothstep(0.35, 0.65, colorNoise1);
+    colorNoise2 = smoothstep(0.45, 0.55, colorNoise2);
     
-    // Mix all three colors
     vec3 color1 = mix(orangeColor, sandColor, colorNoise1);
     vec3 finalColor = mix(color1, greenColor, colorNoise2);
     
-    // Add grain
-    float grain = snoise(vec2(uv.x * 250.0, uv.y * 250.0)) * 0.03;
-    finalColor += vec3(grain);
+    float fineGrain = snoise(vec2(
+      uv.x * 400.0 + time * 0.1, 
+      uv.y * 400.0 + time * 0.1
+    )) * 0.15;
     
-    // Edge handling
-    float edgeFade = smoothstep(0.4, 0.8, dist);
-    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.5));
+    float mediumGrain = snoise(vec2(
+      uv.x * 200.0 - time * 0.05, 
+      uv.y * 200.0 - time * 0.05
+    )) * 0.1;
     
-    float alpha = smoothstep(0.9, 0.2, dist) * blobShape;
+    float grainMask = smoothstep(1.2, 0.2, dist);
+    vec3 grain = vec3(max(fineGrain + mediumGrain, 0.0)) * grainMask;
+    finalColor += grain;
+    
+    float edgeFade = smoothstep(0.4, 1.0, dist);
+    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.2));
+    
+    float alpha = blobShape * smoothstep(1.2, 0.0, dist);
     
     gl_FragColor = vec4(finalColor, alpha);
   }
 `;
 
-// Create a plane geometry
-const geometry = new THREE.PlaneGeometry(3, 3, 128, 128);
+// Create a wider plane geometry
+const geometry = new THREE.PlaneGeometry(5, 4, 128, 128);
 
 const material = new THREE.ShaderMaterial({
     vertexShader,
