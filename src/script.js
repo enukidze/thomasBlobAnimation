@@ -2,20 +2,30 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 10;
+// Set a larger size for the element
+const WIDTH = 600;
+const HEIGHT = 600;
+
+const camera = new THREE.PerspectiveCamera(75, WIDTH / HEIGHT, 0.1, 1000);
+camera.position.z = 4;
 
 // Calculate viewport bounds based on camera FOV and position
 const fov = camera.fov * (Math.PI / 180);
 const height = 2 * Math.tan(fov / 2) * camera.position.z;
 const width = height * camera.aspect;
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+const renderer = new THREE.WebGLRenderer({
+    antialias: true
+});
+renderer.setSize(WIDTH, HEIGHT);
+// Add some CSS to center the element
+renderer.domElement.style.margin = 'auto';
+renderer.domElement.style.display = 'block';
 document.body.appendChild(renderer.domElement);
 
 // Vertex Shader
 const vertexShader = `
+  uniform float time;
   varying vec2 vUv;
   
   void main() {
@@ -28,8 +38,8 @@ const vertexShader = `
 const fragmentShader = `
   uniform float time;
   varying vec2 vUv;
-
-  // Simplex noise function
+  
+  // Include noise functions from fragment shader
   vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec2 mod289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec3 permute(vec3 x) { return mod289(((x*34.0)+1.0)*x); }
@@ -59,92 +69,79 @@ const fragmentShader = `
   }
     
   void main() {
-    vec2 uv = vUv;
+    vec2 uv = vUv * 2.0 - 1.0;
+    float dist = length(uv) * 0.8;
     
-    // Slow-moving base noise
-    float baseNoise = snoise(vec2(uv.x * 2.0 + time * 0.1, uv.y * 2.0 + time * 0.15)) * 0.5 + 0.5;
+    // Create three layers of noise for more complex movement
+    float baseNoise = snoise(vec2(
+      uv.x * 1.2 + time * 0.15, 
+      uv.y * 1.2 + time * 0.17
+    )) * 0.6;
     
-    // Additional layer of finer, faster noise
-    float detailNoise = snoise(vec2(uv.x * 4.0 - time * 0.05, uv.y * 4.0 - time * 0.075)) * 0.25;
+    float noise2 = snoise(vec2(
+      uv.x * 2.0 - time * 0.12, 
+      uv.y * 2.0 - time * 0.14
+    )) * 0.4;
     
-    // Combine noise layers
-    float combinedNoise = baseNoise + detailNoise;
+    float noise3 = snoise(vec2(
+      uv.x * 1.5 + time * 0.08, 
+      uv.y * 1.5 + time * 0.09
+    )) * 0.5;
     
-    // New vibrant colors
-    vec3 greenColor = vec3(0.2, 0.8, 0.4);    // Vibrant green
-    vec3 orangeColor = vec3(1.0, 0.6, 0.2);   // Vibrant orange
-    vec3 baseColor = mix(greenColor, orangeColor, combinedNoise);
+    float blobShape = smoothstep(1.0, 0.3, dist + baseNoise + noise2);
     
-    // Add stronger white noise
-    float whiteNoise = snoise(vec2(uv.x * 1000.0, uv.y * 1000.0 + time)) * 0.03;
-    baseColor += vec3(whiteNoise);
+    // Define three colors
+    vec3 orangeColor = vec3(1.0, 0.4, 0.1);    // Vibrant orange
+    vec3 sandColor = vec3(0.95, 0.8, 0.5);     // Warm sand/beige
+    vec3 greenColor = vec3(0.3, 0.85, 0.2);    // Vibrant green
     
-    // Enhanced vignette effect
-    float vignette = 1.0 - smoothstep(0.5, 1.5, length(uv - 0.5) * 2.0);
-    baseColor *= 0.95 + (vignette * 0.05);
+    // Create two noise patterns for color mixing
+    float colorNoise1 = snoise(vec2(
+      uv.x * 1.5 + time * 0.1, 
+      uv.y * 1.5 + time * 0.12
+    )) * 0.5 + 0.5;
     
-    gl_FragColor = vec4(baseColor, 1.0);
+    float colorNoise2 = snoise(vec2(
+      uv.x * 1.8 - time * 0.08, 
+      uv.y * 1.8 - time * 0.1
+    )) * 0.5 + 0.5;
+    
+    // Create smooth transitions between all three colors
+    colorNoise1 = smoothstep(0.2, 0.8, colorNoise1);
+    colorNoise2 = smoothstep(0.3, 0.7, colorNoise2);
+    
+    // Mix all three colors
+    vec3 color1 = mix(orangeColor, sandColor, colorNoise1);
+    vec3 finalColor = mix(color1, greenColor, colorNoise2);
+    
+    // Add grain
+    float grain = snoise(vec2(uv.x * 250.0, uv.y * 250.0)) * 0.03;
+    finalColor += vec3(grain);
+    
+    // Edge handling
+    float edgeFade = smoothstep(0.4, 0.8, dist);
+    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.5));
+    
+    float alpha = smoothstep(0.9, 0.2, dist) * blobShape;
+    
+    gl_FragColor = vec4(finalColor, alpha);
   }
-
-
-
-//   void main() {
-//     vec2 uv = vUv;
-    
-//     // Create softer, larger scale base noise
-//     float baseNoise = snoise(vec2(
-//       uv.x * 1.5 + time * 0.05, 
-//       uv.y * 1.5 + time * 0.07
-//     )) * 0.5 + 0.5;
-    
-//     // Add multiple layers of noise at different scales for cloudlike effect
-//     float noise1 = snoise(vec2(
-//       uv.x * 2.0 + time * 0.03, 
-//       uv.y * 2.0 + time * 0.04
-//     )) * 0.25;
-    
-//     float noise2 = snoise(vec2(
-//       uv.x * 3.0 - time * 0.02, 
-//       uv.y * 3.0 - time * 0.03
-//     )) * 0.125;
-    
-//     // Combine noises with smooth falloff
-//     float combinedNoise = smoothstep(0.2, 0.8, baseNoise + noise1 + noise2);
-    
-//     // Softer color transition
-//     vec3 greenColor = vec3(0.4, 0.85, 0.4);    // Softer green
-//     vec3 creamColor = vec3(0.95, 0.92, 0.85);  // Warm cream color
-    
-//     // Create soft edges using distance from center
-//     vec2 center = vec2(0.5, 0.5);
-//     float dist = length(uv - center);
-//     float softEdge = 1.0 - smoothstep(0.0, 1.0, dist * 1.5);
-    
-//     // Mix colors with soft edges
-//     vec3 baseColor = mix(creamColor, greenColor, combinedNoise * softEdge);
-    
-//     // Add very fine grain for texture
-//     float grain = snoise(vec2(uv.x * 200.0, uv.y * 200.0)) * 0.015;
-//     baseColor += vec3(grain);
-    
-//     // Fade edges to white
-//     vec3 white = vec3(1.0);
-//     float edgeFade = smoothstep(0.4, 1.0, dist);
-//     baseColor = mix(baseColor, white, edgeFade);
-    
-//     gl_FragColor = vec4(baseColor, 1.0);
-//   }
 `;
 
-// Create a single large plane that covers the viewport
-const geometry = new THREE.PlaneGeometry(width, height, 1, 1);
+// Create a plane geometry
+const geometry = new THREE.PlaneGeometry(3, 3, 128, 128);
 
 const material = new THREE.ShaderMaterial({
-  vertexShader,
-  fragmentShader,
-  uniforms: {
-    time: { value: 0.0 }
-  }
+    vertexShader,
+    fragmentShader,
+    uniforms: {
+        time: {
+            value: 0.0
+        }
+    },
+    transparent: true,
+    depthWrite: false,
+    depthTest: false
 });
 
 const mesh = new THREE.Mesh(geometry, material);
@@ -154,21 +151,15 @@ scene.add(mesh);
 const clock = new THREE.Clock();
 
 function animate() {
-  requestAnimationFrame(animate);
-  const time = clock.getElapsedTime();
-  mesh.material.uniforms.time.value = time;
-  renderer.render(scene, camera);
+    requestAnimationFrame(animate);
+    const time = clock.getElapsedTime();
+    mesh.material.uniforms.time.value = time;
+    renderer.render(scene, camera);
 }
 animate();
 
 // Handle Window Resizing
 window.addEventListener("resize", () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  
-  // Update plane size
-  const height = 2 * Math.tan(fov / 2) * camera.position.z;
-  const width = height * camera.aspect;
-  mesh.scale.set(width, height, 1);
+    // Remove this event listener since we want fixed size
+    // Alternatively, you could update it if the element needs to be responsive
 });
