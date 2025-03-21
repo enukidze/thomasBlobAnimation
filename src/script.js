@@ -42,6 +42,8 @@ const fragmentShader = `
   uniform float complexity;
   uniform float colorIntensity;
   uniform float grainAmount;
+  uniform float sphereEffect;
+  uniform float layerCompression;
   uniform vec3 darkestGreen;
   uniform vec3 mainGreen;
   uniform vec3 darkestOrange;
@@ -92,6 +94,9 @@ const fragmentShader = `
     uv.x *= 1.4;
     float dist = length(uv);
     
+    // Modify distance calculation based on sphereEffect
+    float modifiedDist = mix(dist, pow(dist, 2.0 - sphereEffect), sphereEffect);
+    
     // Add seed to time calculations for randomization
     vec2 rotUv1 = rotate(uv, (time + seed) * 0.1);
     vec2 rotUv2 = rotate(uv, -(time + seed) * 0.15 + 1.0);
@@ -118,8 +123,15 @@ const fragmentShader = `
       uv.y * 2.3 * complexity + cos((time + seed) * 0.2)
     )) * 0.25;
     
-    // More complex blob shape
-    float blobShape = smoothstep(1.1, 0.2, dist + baseNoise + noise2 + noise3 + noise4);
+    // Compress noise effects based on layerCompression
+    float compressedNoise = (baseNoise + noise2 + noise3 + noise4) * (1.0 - layerCompression * 0.5);
+    
+    // More complex blob shape, modified for sphere effect
+    float blobShape = smoothstep(
+      1.1 - sphereEffect * 0.5, 
+      0.2 + sphereEffect * 0.7, 
+      modifiedDist + compressedNoise
+    );
     
     // Use custom colors from uniforms
     vec3 darkGreen = mix(darkestGreen, mainGreen, 0.3);
@@ -131,19 +143,25 @@ const fragmentShader = `
     vec3 darkSand = mix(darkestSand, mainSand, 0.3);
     vec3 lightSand = mix(mainSand, vec3(1.0), 0.3);
     
+    // Compress UV coordinates for color calculations based on layerCompression
+    vec2 compressedUv1 = rotUv1 * (1.0 - layerCompression * 0.3);
+    vec2 compressedUv2 = rotUv2 * (1.0 - layerCompression * 0.3);
+    vec2 compressedUv3 = rotUv3 * (1.0 - layerCompression * 0.3);
+    
     // Multiple layers of color noise with varying patterns
-    float colorNoise1 = snoise(rotUv1 * 0.6 * complexity + (time + seed) * 0.07) * 0.5 + 0.5;
-    float colorNoise2 = snoise(rotUv2 * 0.9 * complexity - (time + seed) * 0.05) * 0.5 + 0.5;
-    float colorNoise3 = snoise(rotUv3 * 1.2 * complexity + (time + seed) * 0.03) * 0.5 + 0.5;
-    float colorNoise4 = snoise(uv * 1.5 * complexity - (time + seed) * 0.04) * 0.5 + 0.5;
-    float colorNoise5 = snoise(rotate(uv, (time + seed) * 0.05) * 1.8 * complexity) * 0.5 + 0.5;
+    float colorNoise1 = snoise(compressedUv1 * 0.6 * complexity + (time + seed) * 0.07) * 0.5 + 0.5;
+    float colorNoise2 = snoise(compressedUv2 * 0.9 * complexity - (time + seed) * 0.05) * 0.5 + 0.5;
+    float colorNoise3 = snoise(compressedUv3 * 1.2 * complexity + (time + seed) * 0.03) * 0.5 + 0.5;
+    float colorNoise4 = snoise(uv * (1.5 - layerCompression * 0.5) * complexity - (time + seed) * 0.04) * 0.5 + 0.5;
+    float colorNoise5 = snoise(rotate(uv, (time + seed) * 0.05) * (1.8 - layerCompression * 0.6) * complexity) * 0.5 + 0.5;
     
     // Complex transitions
-    colorNoise1 = smoothstep(0.3, 0.7, colorNoise1);
-    colorNoise2 = smoothstep(0.4, 0.6, colorNoise2);
-    colorNoise3 = smoothstep(0.45, 0.55, colorNoise3);
-    colorNoise4 = smoothstep(0.35, 0.65, colorNoise4);
-    colorNoise5 = smoothstep(0.25, 0.75, colorNoise5);
+    float transitionSharpness = 0.2 - layerCompression * 0.1;
+    colorNoise1 = smoothstep(0.5 - transitionSharpness, 0.5 + transitionSharpness, colorNoise1);
+    colorNoise2 = smoothstep(0.5 - transitionSharpness, 0.5 + transitionSharpness, colorNoise2);
+    colorNoise3 = smoothstep(0.5 - transitionSharpness, 0.5 + transitionSharpness, colorNoise3);
+    colorNoise4 = smoothstep(0.5 - transitionSharpness, 0.5 + transitionSharpness, colorNoise4);
+    colorNoise5 = smoothstep(0.5 - transitionSharpness, 0.5 + transitionSharpness, colorNoise5);
     
     // Multi-layered color mixing
     vec3 greenLayer = mix(darkestGreen, darkGreen, colorNoise1);
@@ -180,15 +198,17 @@ const fragmentShader = `
     float largeGrain = snoise(rotUv2 * 100.0 + (time + seed) * 0.03) * 0.05 * grainAmount;
     float extraGrain = snoise(rotUv3 * 150.0 - (time + seed) * 0.04) * 0.03 * grainAmount;
     
-    float grainMask = smoothstep(1.2, 0.2, dist);
+    // Modify grain mask based on sphere effect
+    float grainMask = smoothstep(1.2 - sphereEffect * 0.2, 0.2 + sphereEffect * 0.1, modifiedDist);
     vec3 grain = vec3(max(fineGrain + mediumGrain + largeGrain + extraGrain, 0.0)) * grainMask;
     finalColor += grain;
     
-    // Enhanced edge treatment
-    float edgeFade = smoothstep(0.4, 1.0, dist);
-    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.2));
+    // Enhanced edge treatment adjusted for sphere effect
+    float edgeFade = smoothstep(0.4 - sphereEffect * 0.3, 1.0, modifiedDist);
+    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.2 - sphereEffect * 0.6));
     
-    float alpha = blobShape * smoothstep(1.2, 0.0, dist);
+    // Adjust alpha for more spherical shape
+    float alpha = blobShape * smoothstep(1.2 - sphereEffect * 0.4, 0.0, modifiedDist);
     
     gl_FragColor = vec4(finalColor, alpha);
   }
@@ -203,6 +223,9 @@ const settings = {
   complexity: 1.0,
   colorIntensity: 1.0,
   grainAmount: 1.0,
+  // Add new sphere and layer controls
+  sphereEffect: 0.0,
+  layerCompression: 0.0,
   // Add color settings
   darkestGreen: "#336622",
   mainGreen: "#52cc38",
@@ -236,6 +259,9 @@ const material = new THREE.ShaderMaterial({
         complexity: { value: settings.complexity },
         colorIntensity: { value: settings.colorIntensity },
         grainAmount: { value: settings.grainAmount },
+        // Add new uniforms for sphere and layer controls
+        sphereEffect: { value: settings.sphereEffect },
+        layerCompression: { value: settings.layerCompression },
         // Add color uniforms
         darkestGreen: { value: [0.2, 0.55, 0.1] },
         mainGreen: { value: [0.32, 0.8, 0.22] },
@@ -268,6 +294,16 @@ scene.add(mesh);
 // Initialize GUI - check if it already exists first
 if (!window.guiInstance) {
   window.guiInstance = new dat.GUI();
+  
+  // Shape controls - Add a new folder for shape controls
+  const shapeFolder = window.guiInstance.addFolder('Shape');
+  shapeFolder.add(settings, 'sphereEffect', 0.0, 1.0).onChange(value => {
+    material.uniforms.sphereEffect.value = value;
+  });
+  shapeFolder.add(settings, 'layerCompression', 0.0, 1.0).onChange(value => {
+    material.uniforms.layerCompression.value = value;
+  });
+  shapeFolder.open();
   
   // Animation controls
   const animFolder = window.guiInstance.addFolder('Animation');
