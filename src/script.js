@@ -67,60 +67,116 @@ const fragmentShader = `
     g.yz = a0.yz * x12.xz + h.yz * x12.yw;
     return 130.0 * dot(m, g);
   }
+  
+  // Add rotation function for more complex movement
+  vec2 rotate(vec2 v, float a) {
+    float s = sin(a);
+    float c = cos(a);
+    mat2 m = mat2(c, -s, s, c);
+    return m * v;
+  }
     
   void main() {
     vec2 uv = vUv * 2.0 - 1.0;
     uv.x *= 1.4;
     float dist = length(uv);
     
+    // Create multiple rotating UV coordinates for more complex movement
+    vec2 rotUv1 = rotate(uv, time * 0.1);
+    vec2 rotUv2 = rotate(uv, -time * 0.15 + 1.0);
+    vec2 rotUv3 = rotate(uv, time * 0.08 - 0.5);
+    
+    // Complex layered noise for shape
     float baseNoise = snoise(vec2(
-      uv.x * 0.8 + time * 0.1, 
-      uv.y * 1.2 + time * 0.15
+      rotUv1.x * 0.8 + time * 0.1, 
+      rotUv1.y * 1.2 + time * 0.15
     )) * 0.7;
     
     float noise2 = snoise(vec2(
-      uv.x * 1.5 + time * 0.08, 
-      uv.y * 2.0 + time * 0.12
+      rotUv2.x * 1.5 + time * 0.08, 
+      rotUv2.y * 2.0 + time * 0.12
     )) * 0.4;
     
-    float blobShape = smoothstep(1.1, 0.2, dist + baseNoise + noise2);
+    float noise3 = snoise(vec2(
+      rotUv3.x * 2.2 - time * 0.05, 
+      rotUv3.y * 1.8 - time * 0.07
+    )) * 0.3;
     
-    // Slightly more vibrant colors while keeping the same tone
-    vec3 greenColor = vec3(0.32, 0.8, 0.22);     // Slightly more saturated green
-    vec3 orangeColor = vec3(1.0, 0.65, 0.15);    // More punchy orange
-    vec3 sandColor = vec3(0.98, 0.85, 0.55);     // Slightly warmer sand
+    float noise4 = snoise(vec2(
+      uv.x * 2.5 + sin(time * 0.2), 
+      uv.y * 2.3 + cos(time * 0.2)
+    )) * 0.25;
     
-    float colorNoise1 = snoise(vec2(
-      uv.x * 0.6 + time * 0.07, 
-      uv.y * 0.8 + time * 0.09
-    )) * 0.5 + 0.5;
+    // More complex blob shape
+    float blobShape = smoothstep(1.1, 0.2, dist + baseNoise + noise2 + noise3 + noise4);
     
-    float colorNoise2 = snoise(vec2(
-      uv.x * 0.8 - time * 0.05, 
-      uv.y * 1.0 - time * 0.08
-    )) * 0.5 + 0.5;
+    // Extended color palette with more shades
+    vec3 darkestGreen = vec3(0.2, 0.55, 0.1);
+    vec3 darkGreen = vec3(0.25, 0.65, 0.15);
+    vec3 mainGreen = vec3(0.32, 0.8, 0.22);
+    vec3 lightGreen = vec3(0.4, 0.85, 0.3);
     
-    // Slightly sharper color transitions
-    colorNoise1 = smoothstep(0.35, 0.65, colorNoise1);
-    colorNoise2 = smoothstep(0.45, 0.55, colorNoise2);
+    vec3 darkestOrange = vec3(0.7, 0.4, 0.05);
+    vec3 darkOrange = vec3(0.85, 0.5, 0.1);
+    vec3 mainOrange = vec3(1.0, 0.65, 0.15);
+    vec3 lightOrange = vec3(1.0, 0.75, 0.25);
     
-    vec3 color1 = mix(orangeColor, sandColor, colorNoise1);
-    vec3 finalColor = mix(color1, greenColor, colorNoise2);
+    vec3 darkestSand = vec3(0.75, 0.65, 0.35);
+    vec3 darkSand = vec3(0.85, 0.75, 0.45);
+    vec3 mainSand = vec3(0.98, 0.85, 0.55);
+    vec3 lightSand = vec3(1.0, 0.9, 0.65);
     
-    float fineGrain = snoise(vec2(
-      uv.x * 400.0 + time * 0.1, 
-      uv.y * 400.0 + time * 0.1
-    )) * 0.15;
+    // Multiple layers of color noise with varying patterns
+    float colorNoise1 = snoise(rotUv1 * 0.6 + time * 0.07) * 0.5 + 0.5;
+    float colorNoise2 = snoise(rotUv2 * 0.9 - time * 0.05) * 0.5 + 0.5;
+    float colorNoise3 = snoise(rotUv3 * 1.2 + time * 0.03) * 0.5 + 0.5;
+    float colorNoise4 = snoise(uv * 1.5 - time * 0.04) * 0.5 + 0.5;
+    float colorNoise5 = snoise(rotate(uv, time * 0.05) * 1.8) * 0.5 + 0.5;
     
-    float mediumGrain = snoise(vec2(
-      uv.x * 200.0 - time * 0.05, 
-      uv.y * 200.0 - time * 0.05
-    )) * 0.1;
+    // Complex transitions
+    colorNoise1 = smoothstep(0.3, 0.7, colorNoise1);
+    colorNoise2 = smoothstep(0.4, 0.6, colorNoise2);
+    colorNoise3 = smoothstep(0.45, 0.55, colorNoise3);
+    colorNoise4 = smoothstep(0.35, 0.65, colorNoise4);
+    colorNoise5 = smoothstep(0.25, 0.75, colorNoise5);
+    
+    // Multi-layered color mixing
+    vec3 greenLayer = mix(darkestGreen, darkGreen, colorNoise1);
+    greenLayer = mix(greenLayer, mainGreen, colorNoise2);
+    greenLayer = mix(greenLayer, lightGreen, colorNoise3);
+    
+    vec3 orangeLayer = mix(darkestOrange, darkOrange, colorNoise2);
+    orangeLayer = mix(orangeLayer, mainOrange, colorNoise3);
+    orangeLayer = mix(orangeLayer, lightOrange, colorNoise4);
+    
+    vec3 sandLayer = mix(darkestSand, darkSand, colorNoise3);
+    sandLayer = mix(sandLayer, mainSand, colorNoise4);
+    sandLayer = mix(sandLayer, lightSand, colorNoise5);
+    
+    // Complex color blending
+    vec3 color1 = mix(orangeLayer, sandLayer, 
+      colorNoise1 * 0.5 + 
+      colorNoise2 * 0.3 + 
+      colorNoise5 * 0.2
+    );
+    
+    vec3 finalColor = mix(color1, greenLayer, 
+      colorNoise3 * 0.4 + 
+      colorNoise4 * 0.3 + 
+      colorNoise5 * 0.3
+    );
+    
+    // Multi-scale grain
+    float fineGrain = snoise(uv * 400.0 + time * 0.1) * 0.12;
+    float mediumGrain = snoise(rotUv1 * 200.0 - time * 0.05) * 0.08;
+    float largeGrain = snoise(rotUv2 * 100.0 + time * 0.03) * 0.05;
+    float extraGrain = snoise(rotUv3 * 150.0 - time * 0.04) * 0.03;
     
     float grainMask = smoothstep(1.2, 0.2, dist);
-    vec3 grain = vec3(max(fineGrain + mediumGrain, 0.0)) * grainMask;
+    vec3 grain = vec3(max(fineGrain + mediumGrain + largeGrain + extraGrain, 0.0)) * grainMask;
     finalColor += grain;
     
+    // Enhanced edge treatment
     float edgeFade = smoothstep(0.4, 1.0, dist);
     finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.2));
     
