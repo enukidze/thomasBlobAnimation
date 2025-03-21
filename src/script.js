@@ -37,6 +37,7 @@ const vertexShader = `
 // Fragment Shader
 const fragmentShader = `
   uniform float time;
+  uniform float seed;  // Add new uniform for randomization
   varying vec2 vUv;
   
   // Include noise functions from fragment shader
@@ -81,30 +82,30 @@ const fragmentShader = `
     uv.x *= 1.4;
     float dist = length(uv);
     
-    // Create multiple rotating UV coordinates for more complex movement
-    vec2 rotUv1 = rotate(uv, time * 0.1);
-    vec2 rotUv2 = rotate(uv, -time * 0.15 + 1.0);
-    vec2 rotUv3 = rotate(uv, time * 0.08 - 0.5);
+    // Add seed to time calculations for randomization
+    vec2 rotUv1 = rotate(uv, (time + seed) * 0.1);
+    vec2 rotUv2 = rotate(uv, -(time + seed) * 0.15 + 1.0);
+    vec2 rotUv3 = rotate(uv, (time + seed) * 0.08 - 0.5);
     
-    // Complex layered noise for shape
+    // Add seed to noise calculations
     float baseNoise = snoise(vec2(
-      rotUv1.x * 0.8 + time * 0.1, 
-      rotUv1.y * 1.2 + time * 0.15
+      rotUv1.x * 0.8 + (time + seed) * 0.1, 
+      rotUv1.y * 1.2 + (time + seed) * 0.15
     )) * 0.7;
     
     float noise2 = snoise(vec2(
-      rotUv2.x * 1.5 + time * 0.08, 
-      rotUv2.y * 2.0 + time * 0.12
+      rotUv2.x * 1.5 + (time + seed) * 0.08, 
+      rotUv2.y * 2.0 + (time + seed) * 0.12
     )) * 0.4;
     
     float noise3 = snoise(vec2(
-      rotUv3.x * 2.2 - time * 0.05, 
-      rotUv3.y * 1.8 - time * 0.07
+      rotUv3.x * 2.2 - (time + seed) * 0.05, 
+      rotUv3.y * 1.8 - (time + seed) * 0.07
     )) * 0.3;
     
     float noise4 = snoise(vec2(
-      uv.x * 2.5 + sin(time * 0.2), 
-      uv.y * 2.3 + cos(time * 0.2)
+      uv.x * 2.5 + sin((time + seed) * 0.2), 
+      uv.y * 2.3 + cos((time + seed) * 0.2)
     )) * 0.25;
     
     // More complex blob shape
@@ -127,11 +128,11 @@ const fragmentShader = `
     vec3 lightSand = vec3(1.0, 0.9, 0.65);
     
     // Multiple layers of color noise with varying patterns
-    float colorNoise1 = snoise(rotUv1 * 0.6 + time * 0.07) * 0.5 + 0.5;
-    float colorNoise2 = snoise(rotUv2 * 0.9 - time * 0.05) * 0.5 + 0.5;
-    float colorNoise3 = snoise(rotUv3 * 1.2 + time * 0.03) * 0.5 + 0.5;
-    float colorNoise4 = snoise(uv * 1.5 - time * 0.04) * 0.5 + 0.5;
-    float colorNoise5 = snoise(rotate(uv, time * 0.05) * 1.8) * 0.5 + 0.5;
+    float colorNoise1 = snoise(rotUv1 * 0.6 + (time + seed) * 0.07) * 0.5 + 0.5;
+    float colorNoise2 = snoise(rotUv2 * 0.9 - (time + seed) * 0.05) * 0.5 + 0.5;
+    float colorNoise3 = snoise(rotUv3 * 1.2 + (time + seed) * 0.03) * 0.5 + 0.5;
+    float colorNoise4 = snoise(uv * 1.5 - (time + seed) * 0.04) * 0.5 + 0.5;
+    float colorNoise5 = snoise(rotate(uv, (time + seed) * 0.05) * 1.8) * 0.5 + 0.5;
     
     // Complex transitions
     colorNoise1 = smoothstep(0.3, 0.7, colorNoise1);
@@ -167,10 +168,10 @@ const fragmentShader = `
     );
     
     // Multi-scale grain
-    float fineGrain = snoise(uv * 400.0 + time * 0.1) * 0.12;
-    float mediumGrain = snoise(rotUv1 * 200.0 - time * 0.05) * 0.08;
-    float largeGrain = snoise(rotUv2 * 100.0 + time * 0.03) * 0.05;
-    float extraGrain = snoise(rotUv3 * 150.0 - time * 0.04) * 0.03;
+    float fineGrain = snoise(uv * 400.0 + (time + seed) * 0.1) * 0.12;
+    float mediumGrain = snoise(rotUv1 * 200.0 - (time + seed) * 0.05) * 0.08;
+    float largeGrain = snoise(rotUv2 * 100.0 + (time + seed) * 0.03) * 0.05;
+    float extraGrain = snoise(rotUv3 * 150.0 - (time + seed) * 0.04) * 0.03;
     
     float grainMask = smoothstep(1.2, 0.2, dist);
     vec3 grain = vec3(max(fineGrain + mediumGrain + largeGrain + extraGrain, 0.0)) * grainMask;
@@ -193,9 +194,8 @@ const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
     uniforms: {
-        time: {
-            value: 0.0
-        }
+        time: { value: 0.0 },
+        seed: { value: Math.random() * 1000 }  // Add random seed uniform
     },
     transparent: true,
     depthWrite: false,
