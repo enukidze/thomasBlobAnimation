@@ -37,7 +37,17 @@ const vertexShader = `
 // Fragment Shader
 const fragmentShader = `
   uniform float time;
-  uniform float seed;  // Add new uniform for randomization
+  uniform float seed;
+  uniform float speed;
+  uniform float complexity;
+  uniform float colorIntensity;
+  uniform float grainAmount;
+  uniform vec3 darkestGreen;
+  uniform vec3 mainGreen;
+  uniform vec3 darkestOrange;
+  uniform vec3 mainOrange;
+  uniform vec3 darkestSand;
+  uniform vec3 mainSand;
   varying vec2 vUv;
   
   // Include noise functions from fragment shader
@@ -87,52 +97,46 @@ const fragmentShader = `
     vec2 rotUv2 = rotate(uv, -(time + seed) * 0.15 + 1.0);
     vec2 rotUv3 = rotate(uv, (time + seed) * 0.08 - 0.5);
     
-    // Add seed to noise calculations
+    // Add complexity to noise calculations
     float baseNoise = snoise(vec2(
-      rotUv1.x * 0.8 + (time + seed) * 0.1, 
-      rotUv1.y * 1.2 + (time + seed) * 0.15
+      rotUv1.x * 0.8 * complexity + (time + seed) * 0.1, 
+      rotUv1.y * 1.2 * complexity + (time + seed) * 0.15
     )) * 0.7;
     
     float noise2 = snoise(vec2(
-      rotUv2.x * 1.5 + (time + seed) * 0.08, 
-      rotUv2.y * 2.0 + (time + seed) * 0.12
+      rotUv2.x * 1.5 * complexity + (time + seed) * 0.08, 
+      rotUv2.y * 2.0 * complexity + (time + seed) * 0.12
     )) * 0.4;
     
     float noise3 = snoise(vec2(
-      rotUv3.x * 2.2 - (time + seed) * 0.05, 
-      rotUv3.y * 1.8 - (time + seed) * 0.07
+      rotUv3.x * 2.2 * complexity - (time + seed) * 0.05, 
+      rotUv3.y * 1.8 * complexity - (time + seed) * 0.07
     )) * 0.3;
     
     float noise4 = snoise(vec2(
-      uv.x * 2.5 + sin((time + seed) * 0.2), 
-      uv.y * 2.3 + cos((time + seed) * 0.2)
+      uv.x * 2.5 * complexity + sin((time + seed) * 0.2), 
+      uv.y * 2.3 * complexity + cos((time + seed) * 0.2)
     )) * 0.25;
     
     // More complex blob shape
     float blobShape = smoothstep(1.1, 0.2, dist + baseNoise + noise2 + noise3 + noise4);
     
-    // Extended color palette with more shades
-    vec3 darkestGreen = vec3(0.2, 0.55, 0.1);
-    vec3 darkGreen = vec3(0.25, 0.65, 0.15);
-    vec3 mainGreen = vec3(0.32, 0.8, 0.22);
-    vec3 lightGreen = vec3(0.4, 0.85, 0.3);
+    // Use custom colors from uniforms
+    vec3 darkGreen = mix(darkestGreen, mainGreen, 0.3);
+    vec3 lightGreen = mix(mainGreen, vec3(1.0), 0.3);
     
-    vec3 darkestOrange = vec3(0.7, 0.4, 0.05);
-    vec3 darkOrange = vec3(0.85, 0.5, 0.1);
-    vec3 mainOrange = vec3(1.0, 0.65, 0.15);
-    vec3 lightOrange = vec3(1.0, 0.75, 0.25);
+    vec3 darkOrange = mix(darkestOrange, mainOrange, 0.3);
+    vec3 lightOrange = mix(mainOrange, vec3(1.0), 0.3);
     
-    vec3 darkestSand = vec3(0.75, 0.65, 0.35);
-    vec3 darkSand = vec3(0.85, 0.75, 0.45);
-    vec3 mainSand = vec3(0.98, 0.85, 0.55);
-    vec3 lightSand = vec3(1.0, 0.9, 0.65);
+    vec3 darkSand = mix(darkestSand, mainSand, 0.3);
+    vec3 lightSand = mix(mainSand, vec3(1.0), 0.3);
     
     // Multiple layers of color noise with varying patterns
-    float colorNoise1 = snoise(rotUv1 * 0.6 + (time + seed) * 0.07) * 0.5 + 0.5;
-    float colorNoise2 = snoise(rotUv2 * 0.9 - (time + seed) * 0.05) * 0.5 + 0.5;
-    float colorNoise3 = snoise(rotUv3 * 1.2 + (time + seed) * 0.03) * 0.5 + 0.5;
-    float colorNoise4 = snoise(uv * 1.5 - (time + seed) * 0.04) * 0.5 + 0.5;
-    float colorNoise5 = snoise(rotate(uv, (time + seed) * 0.05) * 1.8) * 0.5 + 0.5;
+    float colorNoise1 = snoise(rotUv1 * 0.6 * complexity + (time + seed) * 0.07) * 0.5 + 0.5;
+    float colorNoise2 = snoise(rotUv2 * 0.9 * complexity - (time + seed) * 0.05) * 0.5 + 0.5;
+    float colorNoise3 = snoise(rotUv3 * 1.2 * complexity + (time + seed) * 0.03) * 0.5 + 0.5;
+    float colorNoise4 = snoise(uv * 1.5 * complexity - (time + seed) * 0.04) * 0.5 + 0.5;
+    float colorNoise5 = snoise(rotate(uv, (time + seed) * 0.05) * 1.8 * complexity) * 0.5 + 0.5;
     
     // Complex transitions
     colorNoise1 = smoothstep(0.3, 0.7, colorNoise1);
@@ -167,11 +171,14 @@ const fragmentShader = `
       colorNoise5 * 0.3
     );
     
-    // Multi-scale grain
-    float fineGrain = snoise(uv * 400.0 + (time + seed) * 0.1) * 0.12;
-    float mediumGrain = snoise(rotUv1 * 200.0 - (time + seed) * 0.05) * 0.08;
-    float largeGrain = snoise(rotUv2 * 100.0 + (time + seed) * 0.03) * 0.05;
-    float extraGrain = snoise(rotUv3 * 150.0 - (time + seed) * 0.04) * 0.03;
+    // Apply color intensity
+    finalColor = mix(vec3(0.5), finalColor, colorIntensity);
+    
+    // Multi-scale grain with adjustable amount
+    float fineGrain = snoise(uv * 400.0 + (time + seed) * 0.1) * 0.12 * grainAmount;
+    float mediumGrain = snoise(rotUv1 * 200.0 - (time + seed) * 0.05) * 0.08 * grainAmount;
+    float largeGrain = snoise(rotUv2 * 100.0 + (time + seed) * 0.03) * 0.05 * grainAmount;
+    float extraGrain = snoise(rotUv3 * 150.0 - (time + seed) * 0.04) * 0.03 * grainAmount;
     
     float grainMask = smoothstep(1.2, 0.2, dist);
     vec3 grain = vec3(max(fineGrain + mediumGrain + largeGrain + extraGrain, 0.0)) * grainMask;
@@ -190,20 +197,119 @@ const fragmentShader = `
 // Create a wider plane geometry
 const geometry = new THREE.PlaneGeometry(5, 4, 128, 128);
 
+// Create settings object to control with GUI
+const settings = {
+  speed: 1.0,
+  complexity: 1.0,
+  colorIntensity: 1.0,
+  grainAmount: 1.0,
+  // Add color settings
+  darkestGreen: "#336622",
+  mainGreen: "#52cc38",
+  darkestOrange: "#b26608",
+  mainOrange: "#ff8c19",
+  darkestSand: "#bfa659",
+  mainSand: "#fad98c",
+  regenerate: function() {
+    // Regenerate with a new seed
+    material.uniforms.seed.value = Math.random() * 1000;
+  }
+};
+
+// Convert hex to RGB for shader
+function hexToRgb(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16) / 255,
+    g: parseInt(result[2], 16) / 255,
+    b: parseInt(result[3], 16) / 255
+  } : {r: 0, g: 0, b: 0};
+}
+
 const material = new THREE.ShaderMaterial({
     vertexShader,
     fragmentShader,
     uniforms: {
         time: { value: 0.0 },
-        seed: { value: Math.random() * 1000 }  // Add random seed uniform
+        seed: { value: Math.random() * 1000 },
+        speed: { value: settings.speed },
+        complexity: { value: settings.complexity },
+        colorIntensity: { value: settings.colorIntensity },
+        grainAmount: { value: settings.grainAmount },
+        // Add color uniforms
+        darkestGreen: { value: [0.2, 0.55, 0.1] },
+        mainGreen: { value: [0.32, 0.8, 0.22] },
+        darkestOrange: { value: [0.7, 0.4, 0.05] },
+        mainOrange: { value: [1.0, 0.65, 0.15] },
+        darkestSand: { value: [0.75, 0.65, 0.35] },
+        mainSand: { value: [0.98, 0.85, 0.55] }
     },
     transparent: true,
     depthWrite: false,
     depthTest: false
 });
 
+// Update initial uniform colors from settings
+const updateColorUniform = (name) => {
+  const rgb = hexToRgb(settings[name]);
+  material.uniforms[name].value = [rgb.r, rgb.g, rgb.b];
+};
+
+updateColorUniform('darkestGreen');
+updateColorUniform('mainGreen');
+updateColorUniform('darkestOrange');
+updateColorUniform('mainOrange');
+updateColorUniform('darkestSand');
+updateColorUniform('mainSand');
+
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
+
+// Initialize GUI - check if it already exists first
+if (!window.guiInstance) {
+  window.guiInstance = new dat.GUI();
+  
+  // Animation controls
+  const animFolder = window.guiInstance.addFolder('Animation');
+  animFolder.add(settings, 'speed', 0.1, 3.0).onChange(value => {
+    material.uniforms.speed.value = value;
+  });
+  animFolder.add(settings, 'complexity', 0.1, 2.0).onChange(value => {
+    material.uniforms.complexity.value = value;
+  });
+  animFolder.add(settings, 'colorIntensity', 0.1, 2.0).onChange(value => {
+    material.uniforms.colorIntensity.value = value;
+  });
+  animFolder.add(settings, 'grainAmount', 0.0, 2.0).onChange(value => {
+    material.uniforms.grainAmount.value = value;
+  });
+  animFolder.open();
+  
+  // Color controls
+  const colorFolder = window.guiInstance.addFolder('Colors');
+  colorFolder.addColor(settings, 'darkestGreen').onChange(value => {
+    updateColorUniform('darkestGreen');
+  });
+  colorFolder.addColor(settings, 'mainGreen').onChange(value => {
+    updateColorUniform('mainGreen');
+  });
+  colorFolder.addColor(settings, 'darkestOrange').onChange(value => {
+    updateColorUniform('darkestOrange');
+  });
+  colorFolder.addColor(settings, 'mainOrange').onChange(value => {
+    updateColorUniform('mainOrange');
+  });
+  colorFolder.addColor(settings, 'darkestSand').onChange(value => {
+    updateColorUniform('darkestSand');
+  });
+  colorFolder.addColor(settings, 'mainSand').onChange(value => {
+    updateColorUniform('mainSand');
+  });
+  colorFolder.open();
+  
+  // Regenerate button
+  window.guiInstance.add(settings, 'regenerate');
+}
 
 // Animation Loop
 const clock = new THREE.Clock();
@@ -211,7 +317,7 @@ const clock = new THREE.Clock();
 function animate() {
     requestAnimationFrame(animate);
     const time = clock.getElapsedTime();
-    mesh.material.uniforms.time.value = time;
+    mesh.material.uniforms.time.value = time * settings.speed;
     renderer.render(scene, camera);
 }
 animate();
