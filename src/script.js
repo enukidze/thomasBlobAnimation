@@ -2,26 +2,28 @@
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xffffff);
 
-// Set a larger size for the element
-const WIDTH = 600;
-const HEIGHT = 600;
+// Use window dimensions instead of fixed size
+const renderer = new THREE.WebGLRenderer({
+    antialias: true
+});
+// Set renderer size to match window
+renderer.setSize(window.innerWidth, window.innerHeight);
+// Add some CSS to fill the viewport
+renderer.domElement.style.position = 'absolute';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+document.body.appendChild(renderer.domElement);
 
-const camera = new THREE.PerspectiveCamera(75, WIDTH / HEIGHT, 0.1, 1000);
-camera.position.z = 4;
+// Camera with dynamic aspect ratio
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 3;
 
 // Calculate viewport bounds based on camera FOV and position
 const fov = camera.fov * (Math.PI / 180);
 const height = 2 * Math.tan(fov / 2) * camera.position.z;
 const width = height * camera.aspect;
-
-const renderer = new THREE.WebGLRenderer({
-    antialias: true
-});
-renderer.setSize(WIDTH, HEIGHT);
-// Add some CSS to center the element
-renderer.domElement.style.margin = 'auto';
-renderer.domElement.style.display = 'block';
-document.body.appendChild(renderer.domElement);
 
 // Vertex Shader
 const vertexShader = `
@@ -226,16 +228,178 @@ const settings = {
   // Add new sphere and layer controls
   sphereEffect: 0.0,
   layerCompression: 0.0,
-  // Add color settings
-  darkestGreen: "#336622",
-  mainGreen: "#52cc38",
-  darkestOrange: "#b26608",
-  mainOrange: "#ff8c19",
-  darkestSand: "#bfa659",
-  mainSand: "#fad98c",
+  // Update ALL gradients to be different shades of orange
+  gradient1Start: "#993300", // Deep burnt orange
+  gradient1End: "#cc4400",   // Dark orange
+  gradient2Start: "#c94d00", // Reddish orange
+  gradient2End: "#ff7700",   // Vibrant medium orange
+  gradient3Start: "#ff8800", // Bright orange
+  gradient3End: "#ffaa33",   // Golden orange
   regenerate: function() {
     // Regenerate with a new seed
     material.uniforms.seed.value = Math.random() * 1000;
+  },
+  exportToHTML: function() {
+    // Get current values from uniforms to ensure we use the actual values
+    const currentSettings = {
+      speed: material.uniforms.speed.value,
+      complexity: material.uniforms.complexity.value, 
+      colorIntensity: material.uniforms.colorIntensity.value,
+      grainAmount: material.uniforms.grainAmount.value,
+      sphereEffect: material.uniforms.sphereEffect.value,
+      layerCompression: material.uniforms.layerCompression.value,
+      seed: material.uniforms.seed.value,
+      darkestGreen: material.uniforms.darkestGreen.value,
+      mainGreen: material.uniforms.mainGreen.value,
+      darkestOrange: material.uniforms.darkestOrange.value,
+      mainOrange: material.uniforms.mainOrange.value,
+      darkestSand: material.uniforms.darkestSand.value,
+      mainSand: material.uniforms.mainSand.value
+    };
+    
+    // Create HTML content
+    const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Exported WebGL Animation</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #animation-container { 
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <div id="animation-container"></div>
+  
+  <script>
+    // Create the scene, camera, and renderer
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xffffff);
+    
+    // Use container dimensions
+    const container = document.getElementById('animation-container');
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true
+    });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
+    
+    // Camera with dynamic aspect ratio
+    const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.z = 4;
+    
+    // Calculate viewport bounds based on camera FOV and position
+    const fov = camera.fov * (Math.PI / 180);
+    const height = 2 * Math.tan(fov / 2) * camera.position.z;
+    const width = height * camera.aspect;
+    
+    // Vertex Shader
+    const vertexShader = \`${vertexShader}\`;
+    
+    // Fragment Shader
+    const fragmentShader = \`${fragmentShader}\`;
+    
+    // Create a wider plane geometry
+    const geometry = new THREE.PlaneGeometry(5, 4, 128, 128);
+    
+    // Create material with current settings from GUI
+    const material = new THREE.ShaderMaterial({
+      vertexShader,
+      fragmentShader,
+      uniforms: {
+        time: { value: 0.0 },
+        seed: { value: ${currentSettings.seed} },
+        speed: { value: ${currentSettings.speed} },
+        complexity: { value: ${currentSettings.complexity} },
+        colorIntensity: { value: ${currentSettings.colorIntensity} },
+        grainAmount: { value: ${currentSettings.grainAmount} },
+        sphereEffect: { value: ${currentSettings.sphereEffect} },
+        layerCompression: { value: ${currentSettings.layerCompression} },
+        darkestGreen: { value: [${currentSettings.darkestGreen.join(',')}] },
+        mainGreen: { value: [${currentSettings.mainGreen.join(',')}] },
+        darkestOrange: { value: [${currentSettings.darkestOrange.join(',')}] },
+        mainOrange: { value: [${currentSettings.mainOrange.join(',')}] },
+        darkestSand: { value: [${currentSettings.darkestSand.join(',')}] },
+        mainSand: { value: [${currentSettings.mainSand.join(',')}] }
+      },
+      transparent: true,
+      depthWrite: false,
+      depthTest: false
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+    
+    // Animation Loop
+    const clock = new THREE.Clock();
+    
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+      mesh.material.uniforms.time.value = time * ${currentSettings.speed};
+      renderer.render(scene, camera);
+    }
+    animate();
+    
+    // Handle Window Resizing
+    window.addEventListener("resize", () => {
+      // Update renderer
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      
+      // Update camera aspect ratio
+      camera.aspect = container.clientWidth / container.clientHeight;
+      camera.updateProjectionMatrix();
+    });
+  </script>
+</body>
+</html>`;
+
+    // Create a temporary element to copy to clipboard
+    const tempElement = document.createElement('textarea');
+    tempElement.value = htmlContent;
+    document.body.appendChild(tempElement);
+    tempElement.select();
+    document.execCommand('copy');
+    document.body.removeChild(tempElement);
+    
+    // Create and show a styled notification instead of an alert
+    const notification = document.createElement('div');
+    notification.textContent = 'HTML copied to clipboard!';
+    notification.style.position = 'fixed';
+    notification.style.top = '20px';
+    notification.style.left = '50%';
+    notification.style.transform = 'translateX(-50%)';
+    notification.style.backgroundColor = '#4CAF50';
+    notification.style.color = 'white';
+    notification.style.padding = '16px 32px';
+    notification.style.borderRadius = '4px';
+    notification.style.textAlign = 'center';
+    notification.style.zIndex = '1000';
+    notification.style.fontSize = '18px';
+    notification.style.boxShadow = '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)';
+    notification.style.opacity = '0';
+    notification.style.transition = 'opacity 0.3s ease-in-out';
+    
+    document.body.appendChild(notification);
+    
+    // Fade in
+    setTimeout(() => {
+      notification.style.opacity = '1';
+    }, 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      setTimeout(() => {
+        document.body.removeChild(notification);
+      }, 300);
+    }, 3000);
   }
 };
 
@@ -259,16 +423,15 @@ const material = new THREE.ShaderMaterial({
         complexity: { value: settings.complexity },
         colorIntensity: { value: settings.colorIntensity },
         grainAmount: { value: settings.grainAmount },
-        // Add new uniforms for sphere and layer controls
         sphereEffect: { value: settings.sphereEffect },
         layerCompression: { value: settings.layerCompression },
-        // Add color uniforms
-        darkestGreen: { value: [0.2, 0.55, 0.1] },
-        mainGreen: { value: [0.32, 0.8, 0.22] },
-        darkestOrange: { value: [0.7, 0.4, 0.05] },
-        mainOrange: { value: [1.0, 0.65, 0.15] },
-        darkestSand: { value: [0.75, 0.65, 0.35] },
-        mainSand: { value: [0.98, 0.85, 0.55] }
+        // Map the new gradient names to the original shader uniform names
+        darkestGreen: { value: [0.2, 0.55, 0.1] },  // gradient1Start
+        mainGreen: { value: [0.32, 0.8, 0.22] },    // gradient1End
+        darkestOrange: { value: [0.7, 0.4, 0.05] }, // gradient2Start
+        mainOrange: { value: [1.0, 0.65, 0.15] },   // gradient2End
+        darkestSand: { value: [0.75, 0.65, 0.35] }, // gradient3Start
+        mainSand: { value: [0.98, 0.85, 0.55] }     // gradient3End
     },
     transparent: true,
     depthWrite: false,
@@ -276,76 +439,101 @@ const material = new THREE.ShaderMaterial({
 });
 
 // Update initial uniform colors from settings
-const updateColorUniform = (name) => {
-  const rgb = hexToRgb(settings[name]);
-  material.uniforms[name].value = [rgb.r, rgb.g, rgb.b];
+const updateColorUniform = (settingName, uniformName) => {
+  const rgb = hexToRgb(settings[settingName]);
+  material.uniforms[uniformName].value = [rgb.r, rgb.g, rgb.b];
 };
 
-updateColorUniform('darkestGreen');
-updateColorUniform('mainGreen');
-updateColorUniform('darkestOrange');
-updateColorUniform('mainOrange');
-updateColorUniform('darkestSand');
-updateColorUniform('mainSand');
+// Map settings names to uniform names
+updateColorUniform('gradient1Start', 'darkestGreen');
+updateColorUniform('gradient1End', 'mainGreen');
+updateColorUniform('gradient2Start', 'darkestOrange');
+updateColorUniform('gradient2End', 'mainOrange');
+updateColorUniform('gradient3Start', 'darkestSand');
+updateColorUniform('gradient3End', 'mainSand');
 
 const mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
-// Initialize GUI - check if it already exists first
-if (!window.guiInstance) {
-  window.guiInstance = new dat.GUI();
-  
-  // Shape controls - Add a new folder for shape controls
-  const shapeFolder = window.guiInstance.addFolder('Shape');
-  shapeFolder.add(settings, 'sphereEffect', 0.0, 1.0).onChange(value => {
-    material.uniforms.sphereEffect.value = value;
-  });
-  shapeFolder.add(settings, 'layerCompression', 0.0, 1.0).onChange(value => {
-    material.uniforms.layerCompression.value = value;
-  });
-  shapeFolder.open();
-  
-  // Animation controls
-  const animFolder = window.guiInstance.addFolder('Animation');
-  animFolder.add(settings, 'speed', 0.1, 3.0).onChange(value => {
-    material.uniforms.speed.value = value;
-  });
-  animFolder.add(settings, 'complexity', 0.1, 2.0).onChange(value => {
-    material.uniforms.complexity.value = value;
-  });
-  animFolder.add(settings, 'colorIntensity', 0.1, 2.0).onChange(value => {
-    material.uniforms.colorIntensity.value = value;
-  });
-  animFolder.add(settings, 'grainAmount', 0.0, 2.0).onChange(value => {
-    material.uniforms.grainAmount.value = value;
-  });
-  animFolder.open();
-  
-  // Color controls
-  const colorFolder = window.guiInstance.addFolder('Colors');
-  colorFolder.addColor(settings, 'darkestGreen').onChange(value => {
-    updateColorUniform('darkestGreen');
-  });
-  colorFolder.addColor(settings, 'mainGreen').onChange(value => {
-    updateColorUniform('mainGreen');
-  });
-  colorFolder.addColor(settings, 'darkestOrange').onChange(value => {
-    updateColorUniform('darkestOrange');
-  });
-  colorFolder.addColor(settings, 'mainOrange').onChange(value => {
-    updateColorUniform('mainOrange');
-  });
-  colorFolder.addColor(settings, 'darkestSand').onChange(value => {
-    updateColorUniform('darkestSand');
-  });
-  colorFolder.addColor(settings, 'mainSand').onChange(value => {
-    updateColorUniform('mainSand');
-  });
-  colorFolder.open();
-  
-  // Regenerate button
-  window.guiInstance.add(settings, 'regenerate');
+// First, let's clear any existing GUI to prevent duplicates
+if (window.guiInstance) {
+  window.guiInstance.destroy();
+  window.guiInstance = null;
 }
+
+// Create the GUI
+window.guiInstance = new dat.GUI();
+
+// Position the GUI at the top-right
+const guiContainer = window.guiInstance.domElement.parentElement;
+guiContainer.style.position = 'absolute';
+guiContainer.style.top = '0';
+guiContainer.style.right = '0';
+guiContainer.style.zIndex = '1000'; // Make sure GUI is above the canvas
+
+// Shape controls
+const shapeFolder = window.guiInstance.addFolder('Shape');
+shapeFolder.add(settings, 'sphereEffect', 0.0, 0.5).onChange(function(value) {
+  material.uniforms.sphereEffect.value = value;
+});
+shapeFolder.add(settings, 'layerCompression', 0.0, 1.0).onChange(function(value) {
+  material.uniforms.layerCompression.value = value;
+});
+shapeFolder.open();
+
+// Animation controls
+const animFolder = window.guiInstance.addFolder('Animation');
+animFolder.add(settings, 'speed', 0.1, 3.0).onChange(function(value) {
+  material.uniforms.speed.value = value;
+});
+animFolder.add(settings, 'complexity', 0.1, 2.0).onChange(function(value) {
+  material.uniforms.complexity.value = value;
+});
+animFolder.add(settings, 'colorIntensity', 0.1, 2.0).onChange(function(value) {
+  material.uniforms.colorIntensity.value = value;
+});
+animFolder.open();
+
+// Texture controls
+const textureFolder = window.guiInstance.addFolder('Texture');
+textureFolder.add(settings, 'grainAmount', 0.0, 2.0).onChange(function(value) {
+  material.uniforms.grainAmount.value = value;
+});
+textureFolder.open();
+
+// Color controls - simplified to basic gradient numbering
+const colorFolder = window.guiInstance.addFolder('Orange Gradients');
+colorFolder.addColor(settings, 'gradient1Start').name('Gradient 1 Start').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.darkestGreen.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.addColor(settings, 'gradient1End').name('Gradient 1 End').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.mainGreen.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.addColor(settings, 'gradient2Start').name('Gradient 2 Start').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.darkestOrange.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.addColor(settings, 'gradient2End').name('Gradient 2 End').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.mainOrange.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.addColor(settings, 'gradient3Start').name('Gradient 3 Start').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.darkestSand.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.addColor(settings, 'gradient3End').name('Gradient 3 End').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.mainSand.value = [rgb.r, rgb.g, rgb.b];
+});
+colorFolder.open();
+
+// Regenerate button
+window.guiInstance.add(settings, 'regenerate').name('New Random Seed');
+
+// Add the export button to the GUI
+window.guiInstance.add(settings, 'exportToHTML').name('Export to HTML');
 
 // Animation Loop
 const clock = new THREE.Clock();
@@ -360,6 +548,10 @@ animate();
 
 // Handle Window Resizing
 window.addEventListener("resize", () => {
-    // Remove this event listener since we want fixed size
-    // Alternatively, you could update it if the element needs to be responsive
+    // Update renderer
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    
+    // Update camera aspect ratio
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
 });
