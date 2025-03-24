@@ -18,7 +18,7 @@ document.body.appendChild(renderer.domElement);
 
 // Camera with dynamic aspect ratio
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.z = 3;
+camera.position.z =  4;
 
 // Calculate viewport bounds based on camera FOV and position
 const fov = camera.fov * (Math.PI / 180);
@@ -52,6 +52,7 @@ const fragmentShader = `
   uniform vec3 mainOrange;
   uniform vec3 darkestSand;
   uniform vec3 mainSand;
+  uniform vec3 backgroundColor;
   varying vec2 vUv;
   
   // Include noise functions from fragment shader
@@ -205,9 +206,9 @@ const fragmentShader = `
     vec3 grain = vec3(max(fineGrain + mediumGrain + largeGrain + extraGrain, 0.0)) * grainMask;
     finalColor += grain;
     
-    // Enhanced edge treatment adjusted for sphere effect
+    // Enhanced edge treatment - blend with background color instead of white
     float edgeFade = smoothstep(0.4 - sphereEffect * 0.3, 1.0, modifiedDist);
-    finalColor = mix(finalColor, vec3(1.0), pow(edgeFade, 1.2 - sphereEffect * 0.6));
+    finalColor = mix(finalColor, backgroundColor, pow(edgeFade, 1.2 - sphereEffect * 0.6));
     
     // Adjust alpha for more spherical shape
     float alpha = blobShape * smoothstep(1.2 - sphereEffect * 0.4, 0.0, modifiedDist);
@@ -228,6 +229,8 @@ const settings = {
   // Add new sphere and layer controls
   sphereEffect: 0.0,
   layerCompression: 0.0,
+  // Add size option
+  size: 'medium', // Options: 'small', 'medium', 'supersized'
   // Update ALL gradients to be different shades of orange
   gradient1Start: "#993300", // Deep burnt orange
   gradient1End: "#cc4400",   // Dark orange
@@ -235,9 +238,110 @@ const settings = {
   gradient2End: "#ff7700",   // Vibrant medium orange
   gradient3Start: "#ff8800", // Bright orange
   gradient3End: "#ffaa33",   // Golden orange
+  // Add background color option
+  backgroundColor: "#ffffff", // Default white background
   regenerate: function() {
     // Regenerate with a new seed
     material.uniforms.seed.value = Math.random() * 1000;
+  },
+  // Modified setSize function to completely eliminate the glitch when switching sizes
+  setSize: function(sizeOption) {
+    let width, height;
+    
+    switch(sizeOption) {
+      case 'small':
+        width = 600;
+        height = 600;
+        break;
+      case 'supersized':
+        width = 2400;
+        height = 2400;
+        break;
+      case 'medium':
+      default:
+        // Use window dimensions for medium (current behavior)
+        width = window.innerWidth;
+        height = window.innerHeight;
+    }
+    
+    // Update renderer size
+    renderer.setSize(width, height);
+    
+    // Update camera aspect ratio
+    camera.aspect = width / height;
+    
+    // Adjust the camera position based on the aspect ratio to ensure full coverage
+    const aspectRatio = width / height;
+    if (aspectRatio > 1) {
+      // Wider viewport needs camera further back
+      camera.position.z = 4.5;
+    } else {
+      // Taller viewport can have camera closer
+      camera.position.z = 4;
+    }
+    
+    camera.updateProjectionMatrix();
+    
+    // Clear any previous styling
+    renderer.domElement.style = ''; // Reset all styles first
+    
+    // Update renderer element style for fixed sizes
+    if (sizeOption === 'medium') {
+      // Full window size (current behavior)
+      renderer.domElement.style.position = 'absolute';
+      renderer.domElement.style.top = '0';
+      renderer.domElement.style.left = '0';
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
+      renderer.domElement.style.margin = '0';
+      renderer.domElement.style.transform = ''; // Clear any transform
+      document.body.style.margin = '0';
+      document.body.style.overflow = 'hidden'; // Prevent scrollbars
+    } else {
+      // Fixed size centered
+      renderer.domElement.style.position = 'absolute';
+      renderer.domElement.style.top = '50%';
+      renderer.domElement.style.left = '50%';
+      renderer.domElement.style.width = width + 'px';
+      renderer.domElement.style.height = height + 'px';
+      renderer.domElement.style.transform = 'translate(-50%, -50%)';
+      renderer.domElement.style.margin = '0';
+      // Add a border for visibility
+      renderer.domElement.style.border = '1px solid #ccc';
+    }
+    
+    // For complete recreation of the mesh to avoid any glitches:
+    if (mesh) {
+      // First remove the old mesh
+      scene.remove(mesh);
+      
+      // Dispose of old geometry properly
+      if (mesh.geometry) {
+        mesh.geometry.dispose();
+      }
+      
+      // Create completely new geometry based on aspect ratio
+      const planeWidth = aspectRatio > 1 ? 6 : 5;
+      const planeHeight = aspectRatio < 1 ? 6 : 4;
+      
+      // Create new geometry for the mesh
+      const newGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 128, 128);
+      
+      // Create entirely new mesh with existing material
+      mesh = new THREE.Mesh(newGeometry, material);
+      
+      // Add the new mesh back to the scene
+      scene.add(mesh);
+    }
+    
+    // Force renderer to clear any cached state
+    renderer.clear();
+    
+    // Trigger an immediate render to prevent flashing
+    renderer.render(scene, camera);
+    
+    // Save current size option
+    settings.size = sizeOption;
   },
   exportToHTML: function() {
     // Get current values from uniforms to ensure we use the actual values
@@ -249,13 +353,38 @@ const settings = {
       sphereEffect: material.uniforms.sphereEffect.value,
       layerCompression: material.uniforms.layerCompression.value,
       seed: material.uniforms.seed.value,
+      size: settings.size,
       darkestGreen: material.uniforms.darkestGreen.value,
       mainGreen: material.uniforms.mainGreen.value,
       darkestOrange: material.uniforms.darkestOrange.value,
       mainOrange: material.uniforms.mainOrange.value,
       darkestSand: material.uniforms.darkestSand.value,
-      mainSand: material.uniforms.mainSand.value
+      mainSand: material.uniforms.mainSand.value,
+      backgroundColor: material.uniforms.backgroundColor.value
     };
+    
+    // Convert background color to hex format for the scene background
+    const bgColorHex = settings.backgroundColor;
+    
+    // Determine dimensions based on size setting
+    let width, height, containerStyle;
+    switch(currentSettings.size) {
+      case 'small':
+        width = 600;
+        height = 600;
+        containerStyle = 'width: 600px; height: 600px; margin: 0 auto;';
+        break;
+      case 'supersized':
+        width = 2400;
+        height = 2400;
+        containerStyle = 'width: 2400px; height: 2400px; margin: 0 auto;';
+        break;
+      case 'medium':
+      default:
+        width = '100vw';
+        height = '100vh';
+        containerStyle = 'width: 100vw; height: 100vh;';
+    }
     
     // Create HTML content
     const htmlContent = `<!DOCTYPE html>
@@ -265,11 +394,11 @@ const settings = {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Exported WebGL Animation</title>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: auto; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: ${bgColorHex}; }
     #animation-container { 
       position: relative;
-      width: 100vw;
-      height: 100vh;
+      ${containerStyle}
+      overflow: hidden;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -280,33 +409,36 @@ const settings = {
   <script>
     // Create the scene, camera, and renderer
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xffffff);
+    scene.background = new THREE.Color("${bgColorHex}");
     
     // Use container dimensions
     const container = document.getElementById('animation-container');
     const renderer = new THREE.WebGLRenderer({
-      antialias: true
+      antialias: true,
+      alpha: true
     });
+    
+    // Set renderer size based on exported size option
     renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(renderer.domElement);
     
     // Camera with dynamic aspect ratio
     const camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    camera.position.z = 4;
     
-    // Calculate viewport bounds based on camera FOV and position
-    const fov = camera.fov * (Math.PI / 180);
-    const height = 2 * Math.tan(fov / 2) * camera.position.z;
-    const width = height * camera.aspect;
+    // Adjust camera position based on aspect ratio
+    const aspectRatio = container.clientWidth / container.clientHeight;
+    camera.position.z = aspectRatio > 1 ? 4.5 : 4;
+    
+    // Create a plane geometry sized appropriately for the aspect ratio
+    const planeWidth = aspectRatio > 1 ? 6 : 5;
+    const planeHeight = aspectRatio < 1 ? 6 : 4;
+    const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 128, 128);
     
     // Vertex Shader
     const vertexShader = \`${vertexShader}\`;
     
     // Fragment Shader
     const fragmentShader = \`${fragmentShader}\`;
-    
-    // Create a wider plane geometry
-    const geometry = new THREE.PlaneGeometry(5, 4, 128, 128);
     
     // Create material with current settings from GUI
     const material = new THREE.ShaderMaterial({
@@ -326,14 +458,15 @@ const settings = {
         darkestOrange: { value: [${currentSettings.darkestOrange.join(',')}] },
         mainOrange: { value: [${currentSettings.mainOrange.join(',')}] },
         darkestSand: { value: [${currentSettings.darkestSand.join(',')}] },
-        mainSand: { value: [${currentSettings.mainSand.join(',')}] }
+        mainSand: { value: [${currentSettings.mainSand.join(',')}] },
+        backgroundColor: { value: [${currentSettings.backgroundColor.join(',')}] }
       },
       transparent: true,
       depthWrite: false,
       depthTest: false
     });
     
-    const mesh = new THREE.Mesh(geometry, material);
+    let mesh = new THREE.Mesh(geometry, material);
     scene.add(mesh);
     
     // Animation Loop
@@ -347,14 +480,17 @@ const settings = {
     }
     animate();
     
-    // Handle Window Resizing
+    // Handle Window Resizing only for responsive sizes
     window.addEventListener("resize", () => {
-      // Update renderer
-      renderer.setSize(container.clientWidth, container.clientHeight);
-      
-      // Update camera aspect ratio
-      camera.aspect = container.clientWidth / container.clientHeight;
-      camera.updateProjectionMatrix();
+      // Only update if we're using a responsive container
+      if (container.style.width === '100vw') {
+        // Update renderer
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        
+        // Update camera aspect ratio
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+      }
     });
   </script>
 </body>
@@ -431,7 +567,9 @@ const material = new THREE.ShaderMaterial({
         darkestOrange: { value: [0.7, 0.4, 0.05] }, // gradient2Start
         mainOrange: { value: [1.0, 0.65, 0.15] },   // gradient2End
         darkestSand: { value: [0.75, 0.65, 0.35] }, // gradient3Start
-        mainSand: { value: [0.98, 0.85, 0.55] }     // gradient3End
+        mainSand: { value: [0.98, 0.85, 0.55] },    // gradient3End
+        // Add background color uniform
+        backgroundColor: { value: [1.0, 1.0, 1.0] },  // Default white
     },
     transparent: true,
     depthWrite: false,
@@ -451,8 +589,10 @@ updateColorUniform('gradient2Start', 'darkestOrange');
 updateColorUniform('gradient2End', 'mainOrange');
 updateColorUniform('gradient3Start', 'darkestSand');
 updateColorUniform('gradient3End', 'mainSand');
+// Add background color mapping
+updateColorUniform('backgroundColor', 'backgroundColor');
 
-const mesh = new THREE.Mesh(geometry, material);
+let mesh = new THREE.Mesh(geometry, material);
 scene.add(mesh);
 
 // First, let's clear any existing GUI to prevent duplicates
@@ -470,6 +610,13 @@ guiContainer.style.position = 'absolute';
 guiContainer.style.top = '0';
 guiContainer.style.right = '0';
 guiContainer.style.zIndex = '1000'; // Make sure GUI is above the canvas
+
+// Size controls
+const sizeFolder = window.guiInstance.addFolder('Size');
+sizeFolder.add(settings, 'size', ['small', 'medium', 'supersized']).name('Canvas Size').onChange(function(value) {
+  settings.setSize(value);
+});
+sizeFolder.open();
 
 // Shape controls
 const shapeFolder = window.guiInstance.addFolder('Shape');
@@ -529,11 +676,24 @@ colorFolder.addColor(settings, 'gradient3End').name('Gradient 3 End').onChange(f
 });
 colorFolder.open();
 
+// Add background controls
+const backgroundFolder = window.guiInstance.addFolder('Background');
+backgroundFolder.addColor(settings, 'backgroundColor').name('Background Color').onChange(function(value) {
+  const rgb = hexToRgb(value);
+  material.uniforms.backgroundColor.value = [rgb.r, rgb.g, rgb.b];
+  // Also update the actual scene background
+  scene.background = new THREE.Color(value);
+});
+backgroundFolder.open();
+
 // Regenerate button
 window.guiInstance.add(settings, 'regenerate').name('New Random Seed');
 
 // Add the export button to the GUI
 window.guiInstance.add(settings, 'exportToHTML').name('Export to HTML');
+
+// Initialize with medium size (default)
+settings.setSize('medium');
 
 // Animation Loop
 const clock = new THREE.Clock();
@@ -548,10 +708,40 @@ animate();
 
 // Handle Window Resizing
 window.addEventListener("resize", () => {
-    // Update renderer
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    
-    // Update camera aspect ratio
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
+    // Only update if we're using a responsive container (medium size)
+    if (settings.size === 'medium') {
+        // Get new window dimensions
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        // Update renderer
+        renderer.setSize(width, height);
+        
+        // Update camera aspect ratio
+        camera.aspect = width / height;
+        const aspectRatio = camera.aspect;
+        camera.position.z = aspectRatio > 1 ? 4.5 : 4;
+        camera.updateProjectionMatrix();
+        
+        // Update the geometry
+        const planeWidth = aspectRatio > 1 ? 6 : 5;
+        const planeHeight = aspectRatio < 1 ? 6 : 4;
+        
+        // Remove old mesh
+        scene.remove(mesh);
+        
+        // Dispose of old geometry
+        if (mesh.geometry) {
+            mesh.geometry.dispose();
+        }
+        
+        // Create new geometry
+        const newGeometry = new THREE.PlaneGeometry(planeWidth, planeHeight, 128, 128);
+        
+        // Create new mesh with the same material
+        mesh = new THREE.Mesh(newGeometry, material);
+        
+        // Add back to scene
+        scene.add(mesh);
+    }
 });
